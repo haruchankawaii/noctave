@@ -12,8 +12,14 @@ external assets, telemetry, cloud generation, or AI runtime is needed.
 - `harmony-engine`: seeded search, style inheritance, constraints, score traces,
   locked continuations, tension, and MIDI serialization.
 - `noctave`: loopback HTTP transport, embedded assets, CLI, and desktop launcher.
-- `ui`: dependency-free HTML, CSS, and JavaScript; Web Audio audition, local
+- `ui`: dependency-free HTML, CSS, and strict TypeScript; Web Audio audition, local
   sketchbook storage, and accessible editing controls.
+
+TypeScript is built with Bun. Cargo's build script runs `scripts/build.ts` and
+embeds its browser bundle from `OUT_DIR`; generated JavaScript stays inside ignored
+build output. There is no authored JavaScript or Node/npm runtime. `bun run dev`
+uses a Bun loopback server that compiles the TypeScript on reload and proxies the
+Rust engine. Production needs only the compiled Rust executable and a browser.
 
 The same engine powers both the UI and CLI. The browser does not generate chords.
 Seed + request + engine/profile version reproduce the same progression. Locked

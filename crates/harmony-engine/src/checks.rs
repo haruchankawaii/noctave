@@ -1,5 +1,42 @@
 use super::*;
 #[test]
+fn restoring_does_not_invent_locks_or_change_score() {
+    let first = generate(Request::default()).unwrap();
+    let restored = transpose(&first, &first.request.key).unwrap();
+    assert_eq!(
+        serde_json::to_value(first).unwrap(),
+        serde_json::to_value(restored).unwrap()
+    );
+}
+#[test]
+fn resolved_ending_and_simple_complexity_obey_constraints() {
+    for mode in [
+        Mode::Major,
+        Mode::Minor,
+        Mode::Dorian,
+        Mode::Lydian,
+        Mode::Locrian,
+    ] {
+        let result = generate(Request {
+            mode,
+            cadence: Cadence::Resolved,
+            complexity: Complexity::Simple,
+            creativity: 100,
+            length: 4,
+            ..Default::default()
+        })
+        .unwrap();
+        let last = &result.chords.last().unwrap().chord;
+        assert_eq!(last.degree, 0);
+        assert_eq!(last.alteration, 0);
+        assert_eq!(last.third, mode.intervals()[2]);
+        assert!(result
+            .chords
+            .iter()
+            .all(|c| c.chord.seventh.is_none() && c.chord.extensions.is_empty()));
+    }
+}
+#[test]
 fn same_seed_same_full_result() {
     let a = generate(Request::default()).unwrap();
     let b = generate(Request::default()).unwrap();

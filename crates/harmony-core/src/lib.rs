@@ -360,6 +360,9 @@ pub fn parse_roman(text: &str) -> Result<Chord, String> {
             '#' => alteration += 1,
             _ => break,
         }
+        if !(-2..=2).contains(&alteration) {
+            return Err("At most two Roman accidentals are supported".into());
+        }
         tail = &tail[1..];
     }
     let size = tail

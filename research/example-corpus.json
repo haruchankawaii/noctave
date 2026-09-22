@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "style": "post-rock",
+  "synthetic": true,
+  "provenance": {"source": "Original synthetic examples authored for Noctave", "license": "MIT", "usage": "RESEARCH_ALLOWED", "license_verified": true},
+  "tracks": [
+    {"track_id":"synthetic-001","artist_id":"synthetic-author-a","sections":[
+      {"name":"opening","key":"D","mode":"major","progression":["Iadd9","iii7","IVmaj7","vi7"]},
+      {"name":"return","key":"D","mode":"major","progression":["ii7","ivadd6","I6/4","Vsus4"]}
+    ]},
+    {"track_id":"synthetic-002","artist_id":"synthetic-author-b","sections":[
+      {"name":"verse","key":"A","mode":"minor","progression":["i7","bVImaj7","bIIIadd9","bVII"]}
+    ]}
+  ]
+}

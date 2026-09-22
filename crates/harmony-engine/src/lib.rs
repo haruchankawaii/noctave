@@ -274,7 +274,7 @@ fn candidates(request: &Request) -> Vec<Chord> {
                     alteration: alteration as i8,
                     third: 4,
                     fifth: 7,
-                    seventh: Some(10),
+                    seventh: (request.complexity != Complexity::Simple).then_some(10),
                     extensions: vec![],
                     inversion: 0,
                     source: ChordSource::SecondaryDominant,
@@ -298,11 +298,22 @@ pub fn generate(request: Request) -> Result<Progression, String> {
                 phrase.push(locked.clone());
                 continue;
             }
-            let scores: Vec<f64> = pool
+            let available: Vec<&Chord> = pool
+                .iter()
+                .filter(|chord| {
+                    position + 1 != request.length as usize
+                        || request.cadence != Cadence::Resolved
+                        || (chord.degree == 0
+                            && chord.alteration == 0
+                            && chord.third == request.mode.intervals()[2]
+                            && chord.source == ChordSource::Diatonic)
+                })
+                .collect();
+            let scores: Vec<f64> = available
                 .iter()
                 .map(|chord| scoring::evaluate(chord, &phrase, &request, &profile, position).total)
                 .collect();
-            phrase.push(pool[rng.weighted(&scores, temperature)].clone());
+            phrase.push(available[rng.weighted(&scores, temperature)].clone());
         }
         let score = phrase
             .iter()
@@ -318,7 +329,14 @@ pub fn generate(request: Request) -> Result<Progression, String> {
         &shortlist.iter().map(|p| p.1).collect::<Vec<_>>(),
         temperature * 0.45,
     );
-    render(request, shortlist[index].0.clone(), attempts, key, profile)
+    render(
+        request,
+        shortlist[index].0.clone(),
+        attempts,
+        key,
+        profile,
+        true,
+    )
 }
 fn render(
     request: Request,
@@ -326,6 +344,7 @@ fn render(
     searched: usize,
     key: Note,
     profile: Profile,
+    optimize_inversions: bool,
 ) -> Result<Progression, String> {
     let mut rendered = vec![];
     let mut previous_voice = vec![];
@@ -334,7 +353,11 @@ fn render(
         let mut chord = phrase[i].clone();
         let open = profile.weight("open_voicing") >= 0.6;
         let mut midi = voice(&chord, key, &previous_voice, open);
-        if !locked && !previous_voice.is_empty() && request.complexity != Complexity::Simple {
+        if optimize_inversions
+            && !locked
+            && !previous_voice.is_empty()
+            && request.complexity != Complexity::Simple
+        {
             let cost = |notes: &[u8], inversion: u8| -> f64 {
                 notes
                     .iter()
@@ -404,30 +427,12 @@ pub fn transpose(progression: &Progression, key: &str) -> Result<Progression, St
     for c in &progression.chords {
         c.chord.validate()?;
     }
-    let mut frozen = request.clone();
-    frozen.locks = progression
-        .chords
-        .iter()
-        .map(|c| Some(c.chord.clone()))
-        .collect();
-    let mut result = render(
-        frozen,
+    render(
+        request,
         progression.chords.iter().map(|c| c.chord.clone()).collect(),
         progression.searched,
         key,
         profile,
-    )?;
-    result.request = request;
-    for (i, chord) in result.chords.iter_mut().enumerate() {
-        chord.locked = result.request.locks.get(i).is_some_and(Option::is_some);
-        chord
-            .reasons
-            .retain(|r| !r.starts_with("This relative chord"));
-        if chord.locked {
-            chord
-                .reasons
-                .push("This relative chord and its inversion were preserved by your lock.".into());
-        }
-    }
-    Ok(result)
+        false,
+    )
 }

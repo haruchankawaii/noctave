@@ -1,11 +1,16 @@
 use harmony_engine::{generate, midi, style, transpose, Progression, ENGINE_VERSION};
 use serde::Deserialize;
 use serde_json::json;
-use std::{io::Read, process::Command};
+use std::{
+    io::{Read, Write},
+    net::TcpStream,
+    process::Command,
+    time::Duration,
+};
 use tiny_http::{Header, Method, Response, Server, StatusCode};
 
 const INDEX: &str = include_str!("../../../ui/index.html");
-const SCRIPT: &str = include_str!("../../../ui/app.js");
+const SCRIPT: &str = include_str!(concat!(env!("OUT_DIR"), "/app.js"));
 const CSS: &str = include_str!("../../../ui/styles.css");
 const LOGO: &str = include_str!("../../../ui/mark.svg");
 const MAX_BODY: usize = 262_144;
@@ -80,9 +85,14 @@ fn api(path: &str, body: &[u8]) -> Result<(&'static str, Vec<u8>), String> {
 pub fn serve(port: u16, open: bool) -> Result<(), String> {
     let host = format!("127.0.0.1:{port}");
     let origin = format!("http://{host}");
-    let server = Server::http(&host).map_err(|e| {
-        format!("Cannot open {host}: {e}. Noctave may already be running; try --port 48732.")
-    })?;
+    let server =
+        match Server::http(&host) {
+            Ok(server) => server,
+            Err(_) if open && existing_noctave(&host) => return launch(&origin),
+            Err(error) => return Err(format!(
+                "Cannot open {host}: {error}. Noctave may already be running; try --port 48732."
+            )),
+        };
     println!("Noctave {ENGINE_VERSION}\nStudio: {origin}\nAll processing stays on this device.\nUse Quit in the studio or Ctrl+C to close the server.");
     if open {
         if let Err(e) = launch(&origin) {
@@ -102,7 +112,7 @@ pub fn serve(port: u16, open: bool) -> Result<(), String> {
                 "/app.js"=>("text/javascript; charset=utf-8",SCRIPT.as_bytes().to_vec()),
                 "/styles.css"=>("text/css; charset=utf-8",CSS.as_bytes().to_vec()),
                 "/mark.svg"|"/favicon.ico"=>("image/svg+xml",LOGO.as_bytes().to_vec()),
-                "/api/info"=>("application/json; charset=utf-8",json!({"version":ENGINE_VERSION,"styles":style::definitions(),"defaults":harmony_engine::Request::default()}).to_string().into_bytes()),
+                "/api/info"=>("application/json; charset=utf-8",json!({"application":"noctave","version":ENGINE_VERSION,"styles":style::definitions(),"defaults":harmony_engine::Request::default()}).to_string().into_bytes()),
                 _=>{error(request,404,"Not found");continue;},
             };
             respond(request, 200, kind, body);
@@ -172,6 +182,37 @@ pub fn serve(port: u16, open: bool) -> Result<(), String> {
         }
     }
     Ok(())
+}
+
+fn existing_noctave(host: &str) -> bool {
+    let Ok(address) = host.parse() else {
+        return false;
+    };
+    let Ok(mut stream) = TcpStream::connect_timeout(&address, Duration::from_millis(400)) else {
+        return false;
+    };
+    let _ = stream.set_read_timeout(Some(Duration::from_millis(700)));
+    let _ = stream.set_write_timeout(Some(Duration::from_millis(400)));
+    if write!(
+        stream,
+        "GET /api/info HTTP/1.1\r\nHost: {host}\r\nConnection: close\r\n\r\n"
+    )
+    .is_err()
+    {
+        return false;
+    }
+    let mut response = String::new();
+    if stream.take(65536).read_to_string(&mut response).is_err() {
+        return false;
+    }
+    let Some((_, body)) = response.split_once("\r\n\r\n") else {
+        return false;
+    };
+    serde_json::from_str::<serde_json::Value>(body)
+        .ok()
+        .is_some_and(|value| {
+            value["application"] == "noctave" && value["version"] == ENGINE_VERSION
+        })
 }
 
 #[cfg(target_os = "windows")]
