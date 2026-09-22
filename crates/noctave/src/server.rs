@@ -85,14 +85,15 @@ fn api(path: &str, body: &[u8]) -> Result<(&'static str, Vec<u8>), String> {
 pub fn serve(port: u16, open: bool) -> Result<(), String> {
     let host = format!("127.0.0.1:{port}");
     let origin = format!("http://{host}");
-    let server =
-        match Server::http(&host) {
-            Ok(server) => server,
-            Err(_) if open && existing_noctave(&host) => return launch(&origin),
-            Err(error) => return Err(format!(
-                "Cannot open {host}: {error}. Noctave may already be running; try --port 48732."
-            )),
-        };
+    let server = match Server::http(&host) {
+        Ok(server) => server,
+        Err(_) if open && existing_noctave(&host) => return launch(&origin),
+        Err(error) => {
+            let message =
+                format!("Cannot open {host}: {error}. Try another port with --port 48732.");
+            return Err(message);
+        }
+    };
     println!("Noctave {ENGINE_VERSION}\nStudio: {origin}\nAll processing stays on this device.\nUse Quit in the studio or Ctrl+C to close the server.");
     if open {
         if let Err(e) = launch(&origin) {

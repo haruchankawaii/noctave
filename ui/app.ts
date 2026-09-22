@@ -218,6 +218,13 @@ function applyForm(request: GenerationRequest) {
     }
     control.value = String(request[field]);
   }
+  if (
+    !Array.from($("transpose-key").options).some(
+      (option) => option.value === request.key,
+    )
+  ) {
+    $("transpose-key").add(new Option(request.key, request.key));
+  }
   $("transpose-key").value = request.key;
   updateAvailability();
 }
